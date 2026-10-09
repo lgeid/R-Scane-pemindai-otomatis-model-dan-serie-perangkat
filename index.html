@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>R-Scan | Detektor Kode Model & Seri</title>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        :root {
+            --primary: #165DFF;
+            --secondary: #36CBCB;
+            --dark: #1D2939;
+            --light: #F9FAFB;
+            --success: #00B42A;
+            --warning: #FF7D00;
+            --danger: #F53F3F;
+        }
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .logo-container {
+            background: linear-gradient(135deg, #165DFF 0%, #36CBCB 100%);
+        }
+        
+        .scan-region-highlight {
+            border: 3px solid #165DFF;
+            border-radius: 12px;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+        }
+        
+        .scan-region-highlight-svg {
+            stroke: #165DFF;
+            stroke-width: 3;
+        }
+        
+        .pulse-ring {
+            animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 1; }
+            80%, 100% { transform: scale(1.3); opacity: 0; }
+        }
+        
+        .gradient-border {
+            position: relative;
+            border-radius: 16px;
+        }
+        
+        .gradient-border::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 16px;
+            padding: 2px;
+            background: linear-gradient(135deg, #165DFF, #36CBCB);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+        
+        .card-shadow {
+            box-shadow: 0 4px 24px rgba(22, 93, 255, 0.08);
+        }
+        
+        .scan-line {
+            position: absolute;
+            width: 85%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #165DFF, transparent);
+            animation: scan 2s linear infinite;
+        }
+        
+        @keyframes scan {
+            0% { top: 5%; opacity: 0.8; }
+            50% { opacity: 1; }
+            100% { top: 95%; opacity: 0.8; }
+        }
+        
+        .detection-tag {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen text-slate-800">
+    <!-- Header -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+            <!-- Logo R -->
+            <div class="flex items-center gap-3">
+                <div class="logo-container w-11 h-11 rounded-xl flex items-center justify-center shadow-md">
+                    <span class="text-white text-xl font-bold">R</span>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-slate-800">R-Scan</h1>
+                    <p class="text-xs text-slate-500">Model & Serial Detector</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <span id="status-indicator" class="w-2.5 h-2.5 rounded-full bg-gray-300"></span>
+                <span id="status-text" class="text-xs text-slate-500">Siap</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-5 max-w-md">
+        <!-- Kamera Preview -->
+        <div class="bg-white rounded-2xl p-4 mb-5 card-shadow gradient-border">
+            <div class="relative overflow-hidden rounded-xl bg-slate-900 aspect-square">
+                <div id="reader" class="w-full h-full"></div>
+                <div id="scan-overlay" class="hidden absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div class="relative w-4/5 h-4/5">
+                        <div class="scan-line"></div>
+                        <div class="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-lg"></div>
+                        <div class="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-lg"></div>
+                        <div class="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-lg"></div>
+                        <div class="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-lg"></div>
+                    </div>
+                </div>
+                <div id="camera-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-white">
+                    <i class="fa fa-camera fa-3x mb-3 text-slate-400"></i>
+                    <p class="text-slate-400 text-sm">Kamera belum aktif</p>
+                </div>
+            </div>
+            
+            <!-- Tombol Kontrol -->
+            <div class="flex gap-3 mt-4">
+                <button id="start-btn" onclick="startScanner()" 
+                    class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2">
+                    <i class="fa fa-play"></i>
+                    <span>Mulai Pindai</span>
+                </button>
+                <button id="stop-btn" onclick="stopScanner()" 
+                    class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 hidden">
+                    <i class="fa fa-stop"></i>
+                    <span>Berhenti</span>
+                </button>
+                <button onclick="toggleFlash()" id="flash-btn" 
+                    class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 px-3 rounded-xl transition-all">
+                    <i class="fa fa-bolt"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Hasil Deteksi -->
+        <div class="bg-white rounded-2xl p-5 mb-5 card-shadow">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="font-semibold text-slate-800 flex items-center gap-2">
+                    <i class="fa fa-info-circle text-blue-500"></i>
+                    Hasil Deteksi
+                </h2>
+                <button onclick="clearResults()" class="text-xs text-slate-400 hover:text-red-500 transition-colors">
+                    <i class="fa fa-trash-o mr-1"></i>Bersihkan
+                </button>
+            </div>
+
+            <!-- Kartu Hasil -->
+            <div id="result-container">
+                <div id="empty-state" class="text-center py-8 text-slate-400">
+                    <i class="fa fa-qrcode fa-2x mb-3"></i>
+                    <p>Arahkan kamera ke kode batang atau label produk</p>
+                    <p class="text-xs mt-1">Mendeteksi: No. Model, No. Seri & Barcode</p>
+                </div>
+
+                <div id="detection-results" class="space-y-3 hidden">
+                    <!-- Jenis Deteksi -->
+                    <div id="barcode-section" class="hidden">
+                        <span class="text-xs text-slate-500 font-medium">KODE BATANG</span>
+                        <div class="mt-1 p-3 bg-blue-50 rounded-xl border border-blue-100">
+                            <div class="flex items-center justify-between">
+                                <span id="barcode-value" class="font-mono text-sm text-slate-800 break-all">-</span>
+                                <button onclick="copyText('barcode-value')" class="text-blue-600 hover:text-blue-800 ml-2 flex-shrink-0">
+                                    <i class="fa fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="model-section" class="hidden">
+                        <span class="text-xs text-slate-500 font-medium">NOMOR MODEL</span>
+                        <div class="mt-1 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                            <div class="flex items-center justify-between">
+                                <span id="model-value" class="font-mono text-sm text-slate-800 break-all">-</span>
+                                <button onclick="copyText('model-value')" class="text-emerald-600 hover:text-emerald-800 ml-2 flex-shrink-0">
+                                    <i class="fa fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="serial-section" class="hidden">
+                        <span class="text-xs text-slate-500 font-medium">NOMOR SERI</span>
+                        <div class="mt-1 p-3 bg-amber-50 rounded-xl border border-amber-100">
+                            <div class="flex items-center justify-between">
+                                <span id="serial-value" class="font-mono text-sm text-slate-800 break-all">-</span>
+                                <button onclick="copyText('serial-value')" class="text-amber-600 hover:text-amber-800 ml-2 flex-shrink-0">
+                                    <i class="fa fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Waktu Pindai -->
+                    <div class="pt-2 mt-2 border-t border-slate-100 text-xs text-slate-400">
+                        <span>Dipindai pada: <span id="scan-time">-</span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Riwayat Pindai -->
+        <div class="bg-white rounded-2xl p-5 card-shadow">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="font-semibold text-slate-800 flex items-center gap-2">
+                    <i class="fa fa-history text-slate-500"></i>
+                    Riwayat
+                </h2>
+                <button onclick="clearHistory()" class="text-xs text-slate-400 hover:text-red-500 transition-colors">
+                    Kosongkan
+                </button>
+            </div>
+            <div id="history-list" class="space-y-2 max-h-48 overflow-y-auto text-sm">
+                <p class="text-slate-400 text-center py-4">Belum ada riwayat</p>
+            </div>
+        </div>
+
+        <footer class="text-center mt-6 mb-4 text-xs text-slate-400">
+            <p><span class="font-bold text-blue-600">R-Scan</span> © 2026 — Detektor Kode Produk</p>
+        </footer>
+    </main>
+
+    <!-- Toast Notifikasi -->
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-4 py-2 rounded-xl shadow-lg text-sm opacity-0 transition-opacity duration-300 pointer-events-none z-50">
+        Pesan disalin!
+    </div>
+
+    <script>
+        // Global Variables
+        let html5QrCode;
+        let scannerRunning = false;
+        let flashAvailable = false;
+        let history = [];
+
+        // Pola Deteksi Khusus
+        const MODEL_PATTERNS = [
+            /no\.?\s*model[\/:\s]/i,
+            /nomor\s*model[\/:\s]/i,
+            /model\s*nomor[\/:\s]/i,
+            /model\s*no[\/:\s]/i,
+            /model\s*[:=]\s*([A-Z0-9\-]+)/i,
+            /pn[:\s]+([A-Z0-9\-]+)/i,
+            /part\s*no[:\s]+([A-Z0-9\-]+)/i
+        ];
+
+        const SERIAL_PATTERNS = [
+            /no\.?\s*seri[\/:\s]/i,
+            /nomor\s*seri[\/:\s]/i,
+            /no\.?\s*serie[\/:\s]/i,
+            /serial\s*(?:no|nomor)?[\/:\s]/i,
+            /s\/n[:\s]+([A-Z0-9\-]+)/i,
+            /sn[:\s]+([A-Z0-9\-]+)/i
+        ];
+
+        // Inisialisasi
+        document.addEventListener('DOMContentLoaded', () => {
+            html5QrCode = new Html5Qrcode("reader");
+            loadHistory();
+        });
+
+        // Mulai Pindai
+        async function startScanner() {
+            try {
+                const config = {
+                    fps: 15,
+                    qrbox: { width: 250, height: 250 },
+                    aspectRatio: 1.0
+                };
+
+                await html5QrCode.start(
+                    { facingMode: "environment" },
+                    config,
+                    onScanSuccess,
+                    onScanFailure
+                );
+
+                scannerRunning = true;
+                updateUI();
+                document.getElementById('camera-placeholder').classList.add('hidden');
+                document.getElementById('scan-overlay').classList.remove('hidden');
+                
+                // Cek dukungan lampu kilat
+                const track = html5QrCode.getMediaStream()?.getVideoTracks()[0];
+                if (track && track.getCapabilities().torch) {
+                    flashAvailable = true;
+                    document.getElementById('flash-btn').classList.remove('opacity-50');
+                }
+            } catch (err) {
+                showToast("❌ Gagal mengakses kamera: " + err.message);
+                console.error("Camera error:", err);
+            }
+        }
+
+        // Berhenti Pindai
+        async function stopScanner() {
+            if (scannerRunning && html5QrCode) {
+                try {
+                    await html5QrCode.stop();
+                } catch (e) {}
+                scannerRunning = false;
+                flashAvailable = false;
+                updateUI();
+                document.getElementById('camera-placeholder').classList.remove('hidden');
+                document.getElementById('scan-overlay').classList.add('hidden');
+                document.getElementById('flash-btn').classList.remove('active');
+            }
+        }
+
+        // Hasil Pindai
+        function onScanSuccess(decodedText, decodedResult) {
+            html5QrCode.pause();
+            
+            const detection = detectType(decodedText);
+            displayResult(detection, decodedText);
+            addToHistory(detection, decodedText);
+            
+            // Lanjutkan setelah 2 detik
+            setTimeout(() => {
+                if (scannerRunning) html5QrCode.resume();
+            }, 2000);
+        }
+
+        function onScanFailure(error) {
+            // Abaikan error saat membaca
+        }
+
+        // Deteksi Jenis Kode
+        function detectType(text) {
+            const lowerText = text.toLowerCase();
+            
+            // Cek Nomor Model
+            for (const pattern of MODEL_PATTERNS) {
+                if (pattern.test(text)) {
+                    return 'model';
+                }
+            }
+            
+            // Cek Nomor Seri
+            for (const pattern of SERIAL_PATTERNS) {
+                if (pattern.test(text)) {
+                    return 'serial';
+                }
+            }
+            
+            // Default: Barcode umum
+            return 'barcode';
+        }
+
+        // Tampilkan Hasil
+        function displayResult(type, value) {
+            document.getElementById('empty-state').classList.add('hidden');
+            document.getElementById('detection-results').classList.remove('hidden');
+            
+            // Sembunyikan semua dulu
+            document.getElementById('barcode-section').classList.add('hidden');
+            document.getElementById('model-section').classList.add('hidden');
+            document.getElementById('serial-section').classList.add('hidden');
+            
+            const now = new Date();
+            document.getElementById('scan-time').textContent = 
+                now.toLocaleDateString('id-ID') + ' ' + now.toLocaleTimeString('id-ID');
+            
+            if (type === 'barcode') {
+                document.getElementById('barcode-section').classList.remove('hidden');
+                document.getElementById('barcode-value').textContent = value;
+            } else if (type === 'model') {
+                document.getElementById('model-section').classList.remove('hidden');
+                document.getElementById('model-value').textContent = extractValue(value);
+            } else if (type === 'serial') {
+                document.getElementById('serial-section').classList.remove('hidden');
+                document.getElementById('serial-value').textContent = extractValue(value);
+            }
+        }
+
+        // Ekstrak nilai dari teks
+        function extractValue(text) {
+            const match = text.match(/[:=]\s*(.+)$/);
+            return match ? match[1].trim() : text.trim();
+        }
+
+        // Salin Teks
+        function copyText(elementId) {
+            const text = document.getElementById(elementId).textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                showToast("✅ Disalin ke papan klip!");
+            }).catch(() => {
+                showToast("❌ Gagal menyalin");
+            });
+        }
+
+        // Lampu Kilat
+        async function toggleFlash() {
+            if (!flashAvailable) {
+                showToast("⚠️ Lampu kilat tidak tersedia");
+                return;
+            }
+            
+            try {
+                const track = html5QrCode.getMediaStream().getVideoTracks()[0];
+                const isTorchOn = document.getElementById('flash-btn').classList.contains('active');
+                await track.applyConstraints({ advanced: [{ torch: !isTorchOn }] });
+                document.getElementById('flash-btn').classList.toggle('active');
+                document.getElementById('flash-btn').style.color = isTorchOn ? '' : '#F59E0B';
+            } catch (e) {
+                showToast("⚠️ Tidak bisa mengontrol lampu");
+            }
+        }
+
+        // UI Update
+        function updateUI() {
+            const indicator = document.getElementById('status-indicator');
+            const statusText = document.getElementById('status-text');
+            const startBtn = document.getElementById('start-btn');
+            const stopBtn = document.getElementById('stop-btn');
+            
+            if (scannerRunning) {
+                indicator.classList.remove('bg-gray-300');
+                indicator.classList.add('bg-green-500');
+                statusText.textContent = "Memindai...";
+                startBtn.classList.add('hidden');
+                stopBtn.classList.remove('hidden');
+            } else {
+                indicator.classList.remove('bg-green-500');
+                indicator.classList.add('bg-gray-300');
+                statusText.textContent = "Siap";
+                startBtn.classList.remove('hidden');
+                stopBtn.classList.add('hidden');
+            }
+        }
+
+        // Riwayat
+        function addToHistory(type, value) {
+            const time = new Date().toLocaleTimeString('id-ID');
+            history.unshift({ type, value, time });
+            if (history.length > 20) history.pop();
+            saveHistory();
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const list = document.getElementById('history-list');
+            if (history.length === 0) {
+                list.innerHTML = '<p class="text-slate-400 text-center py-4">Belum ada riwayat</p>';
+                return;
+            }
+            
+            list.innerHTML = history.map(item => {
+                const colors = {
+                    barcode: 'bg-blue-100 text-blue-700',
+                    model: 'bg-emerald-100 text-emerald-700',
+                    serial: 'bg-amber-100 text-amber-700'
+                };
+                const labels = {
+                    barcode: 'Barcode',
+                    model: 'Model',
+                    serial: 'Seri'
+                };
+                return `
+                    <div class="p-2 bg-slate-50 rounded-lg flex items-center justify-between gap-2">
+                        <span class="px-2 py-0.5 rounded text-xs font-medium ${colors[item.type]}">${labels[item.type]}</span>
+                        <span class="flex-1 truncate text-slate-700 font-mono text-xs">${item.value}</span>
+                        <span class="text-xs text-slate-400 flex-shrink-0">${item.time}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function saveHistory() {
+            localStorage.setItem('rscan-history', JSON.stringify(history));
+        }
+
+        function loadHistory() {
+            const saved = localStorage.getItem('rscan-history');
+            if (saved) {
+                history = JSON.parse(saved);
+                renderHistory();
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('empty-state').classList.remove('hidden');
+            document.getElementById('detection-results').classList.add('hidden');
+        }
+
+        function clearHistory() {
+            history = [];
+            localStorage.removeItem('rscan-history');
+            renderHistory();
+            showToast("🗑️ Riwayat dikosongkan");
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.style.opacity = '1';
+            setTimeout(() => {
+                toast.style.opacity = '0';
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
