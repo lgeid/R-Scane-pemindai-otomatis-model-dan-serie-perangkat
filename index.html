@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>R-Scan v5 | Model & Serial Detector</title>
+    <title>R-Scan v6 | Model & Serial Detector</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -55,8 +55,8 @@
                     <span class="text-white text-xl font-bold">R</span>
                 </div>
                 <div>
-                    <h1 class="text-lg font-bold text-slate-800">R-Scan v5</h1>
-                    <p class="text-xs text-slate-500">Pola Cerdas — 2 Angka + Huruf</p>
+                    <h1 class="text-lg font-bold text-slate-800">R-Scan v6</h1>
+                    <p class="text-xs text-slate-500">Pemisahan Model & Seri Akurat</p>
                 </div>
             </div>
             <div class="flex items-center gap-2">
@@ -204,7 +204,7 @@
         </div>
 
         <footer class="text-center mt-6 mb-4 text-xs text-slate-400">
-            <p><span class="font-bold text-blue-600">R-Scan v5</span> © 2026 — Deteksi Pola Cerdas</p>
+            <p><span class="font-bold text-blue-600">R-Scan v6</span> © 2026 — Pemisahan Akurat</p>
         </footer>
     </main>
 
@@ -216,60 +216,67 @@
         let history = [];
         let selectedImageData = null;
 
-        // ========= ATURAN DETEKSI SESUAI PETUNJUK SAPPpo =========
+        // ========== FUNGSI EKSTRAKSI LANGSUNG DARI LABEL ==========
         
-        // ✅ Pola Model: 2 ANGKA di depan, lalu huruf/angka, minimal 6 karakter
-        // Contoh: 43UP7550PTC, 32LQ630BPSA
+        function extractByLabel(text, labelList) {
+            const lines = text.split(/[\r\n]+/);
+            for (let line of lines) {
+                const upperLine = line.toUpperCase();
+                for (const label of labelList) {
+                    const idx = upperLine.indexOf(label);
+                    if (idx !== -1) {
+                        let value = upperLine.substring(idx + label.length).replace(/^[\s:.\-=]+/, '').trim();
+                        const match = value.match(/[A-Z0-9]{5,}/);
+                        if (match) return match[0];
+                    }
+                }
+            }
+            return null;
+        }
+
+        // ========== DETEKSI MODEL: 2 ANGKA DI DEPAN ==========
         function findModel(text) {
+            // Langkah 1: Cari langsung setelah label "NO. MODEL"
+            const directModel = extractByLabel(text, ['NO. MODEL', 'NOMOR MODEL', 'MODEL NO', 'MODEL']);
+            if (directModel && /^\d{2}[A-Z0-9]{4,}/.test(directModel)) {
+                return directModel;
+            }
+            
+            // Langkah 2: Cari pola 2 angka di depan + huruf/angka
             const lines = text.split(/[\r\n]+/);
             let candidates = [];
-            
-            // Pola: 2 angka di awal, lalu huruf besar/angka, minimal 6 karakter total
             const modelPattern = /\b\d{2}[A-Z0-9]{4,}\b/g;
             
             for (let line of lines) {
                 const matches = line.toUpperCase().match(modelPattern);
                 if (matches) {
                     matches.forEach(m => {
-                        // Filter: harus ada campuran angka dan huruf, bukan angka saja
-                        if (m.length >= 6 && /[A-Z]/.test(m) && /\d/.test(m)) {
+                        if (/[A-Z]/.test(m) && /\d/.test(m)) {
                             candidates.push(m);
                         }
                     });
                 }
             }
-            
-            // Pilih yang PALING PANJANG → biasanya itu kode model utama
-            if (candidates.length > 0) {
-                candidates.sort((a, b) => b.length - a.length);
-                return candidates[0];
-            }
-            return null;
+            return candidates.length > 0 ? candidates.sort((a, b) => b.length - a.length)[0] : null;
         }
 
-        // ✅ Pola Seri: cari berdasarkan label "NO. SERI" / "NO SERI" / "SERIAL"
-        function findSerial(text) {
-            const lines = text.split(/[\r\n]+/);
+        // ========== DETEKSI SERI: BUKAN 2 ANGKA DI DEPAN ==========
+        function findSerial(text, modelValue) {
+            // Langkah 1: Cari langsung setelah label "NO. SERI"
+            const directSerial = extractByLabel(text, ['NO. SERI', 'NOMOR SERI', 'SERIAL NO', 'S/N', 'NO.SERI']);
+            if (directSerial) return directSerial;
             
-            for (let line of lines) {
-                const upperLine = line.toUpperCase();
-                if (upperLine.includes('NO. SERI') || upperLine.includes('NO SERI') || 
-                    upperLine.includes('NOMOR SERI') || upperLine.includes('SERIAL') ||
-                    upperLine.includes('NO.SERI')) {
-                    
-                    // Ambil nilai setelah label
-                    let value = line.replace(/.*(NO\.?\s*SER[IÍ]|NOMOR\s*SER[IÍ]|SERIAL)\s*[:=\-]?/i, '').trim();
-                    // Bersihkan, ambil kode alfanumerik
-                    const match = value.match(/[A-Z0-9]{6,}/i);
-                    if (match) return match[0].toUpperCase();
-                }
-            }
-            
-            // Fallback: cari pola umum kode alfanumerik panjang
-            const serialPattern = /\b[A-Z0-9]{8,}\b/g;
+            // Langkah 2: Cari kode alfanumerik panjang YANG BUKAN model
+            const serialPattern = /\b[A-Z0-9]{7,}\b/g;
             let matches = text.toUpperCase().match(serialPattern) || [];
-            // Filter: bukan kode model (2 angka di depan sudah diambil model)
-            matches = matches.filter(m => !/^\d{2}[A-Z]/.test(m));
+            
+            // Filter: buang yang = model, buang yang diawali 2 angka
+            matches = matches.filter(m => {
+                if (modelValue && m === modelValue) return false;
+                if (/^\d{2}[A-Z]/.test(m)) return false; // ini model, bukan seri
+                return true;
+            });
+            
             return matches.length > 0 ? matches[0] : null;
         }
 
@@ -369,7 +376,7 @@
             document.getElementById('detection-results').classList.remove('hidden');
             
             const model = findModel(text);
-            const serial = findSerial(text);
+            const serial = findSerial(text, model); // kirim model untuk di-exclude
             
             document.getElementById('model-value').textContent = model || 'Tidak terdeteksi';
             document.getElementById('serial-value').textContent = serial || 'Tidak terdeteksi';
@@ -423,11 +430,11 @@
         }
 
         function saveHistory() {
-            localStorage.setItem('rscan-history-v5', JSON.stringify(history));
+            localStorage.setItem('rscan-history-v6', JSON.stringify(history));
         }
 
         function loadHistory() {
-            const saved = localStorage.getItem('rscan-history-v5');
+            const saved = localStorage.getItem('rscan-history-v6');
             if (saved) {
                 history = JSON.parse(saved);
                 renderHistory();
@@ -441,7 +448,7 @@
 
         function clearHistory() {
             history = [];
-            localStorage.removeItem('rscan-history-v5');
+            localStorage.removeItem('rscan-history-v6');
             renderHistory();
             showToast("🗑️ Riwayat dikosongkan");
         }
