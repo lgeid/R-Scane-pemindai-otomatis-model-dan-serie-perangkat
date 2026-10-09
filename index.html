@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>R-Scan v3 | Model & Serial Detector</title>
+    <title>R-Scan v4 | Model & Serial Detector</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -66,8 +66,8 @@
                     <span class="text-white text-xl font-bold">R</span>
                 </div>
                 <div>
-                    <h1 class="text-lg font-bold text-slate-800">R-Scan v3</h1>
-                    <p class="text-xs text-slate-500">Model & Serial Detector</p>
+                    <h1 class="text-lg font-bold text-slate-800">R-Scan v4</h1>
+                    <p class="text-xs text-slate-500">Deteksi Lebih Akurat</p>
                 </div>
             </div>
             <div class="flex items-center gap-2">
@@ -126,7 +126,7 @@
                         <i class="fa fa-bolt"></i>
                     </button>
                 </div>
-                <p class="text-xs text-slate-400 mt-2 text-center">💡 Barcode langsung terbaca • Model/Seri: gunakan mode "Dari Foto"</p>
+                <p class="text-xs text-slate-400 mt-2 text-center">💡 Model/Seri: gunakan mode "Dari Foto"</p>
             </div>
         </div>
 
@@ -236,7 +236,7 @@
         </div>
 
         <footer class="text-center mt-6 mb-4 text-xs text-slate-400">
-            <p><span class="font-bold text-blue-600">R-Scan v3</span> © 2026 — Model & Serial Detector</p>
+            <p><span class="font-bold text-blue-600">R-Scan v4</span> © 2026 — Deteksi Lebih Akurat</p>
         </footer>
     </main>
 
@@ -251,21 +251,49 @@
         let history = [];
         let selectedImageData = null;
 
-        // Pola Deteksi yang lebih presisi
-        const MODEL_PATTERNS = [
-            /no\.?\s*model[:\s]+([A-Z0-9\-]+)/i,
-            /nomor\s*model[:\s]+([A-Z0-9\-]+)/i,
-            /model\s*[:\s]+([A-Z0-9\-]+)/i,
-            /model\s*#?\s*[:=]?\s*([A-Z0-9\-]{4,})/i
-        ];
+        // ========= POLA DETEKSI YANG LEBIH FLEKSIBEL =========
+        const MODEL_KEYWORDS = ['NO MODEL', 'NOMOR MODEL', 'MODEL NO', 'MODEL', 'MODEL#', 'MODEL :', 'MODEL:'];
+        const SERIAL_KEYWORDS = ['NO SERI', 'NOMOR SERI', 'NO SERIE', 'SERIAL NO', 'S/N', 'SN', 'SERIAL', 'SERI:', 'NO.SERI'];
 
-        const SERIAL_PATTERNS = [
-            /no\.?\s*seri[:\s]+([A-Z0-9\-]+)/i,
-            /nomor\s*seri[:\s]+([A-Z0-9\-]+)/i,
-            /no\.?\s*serie[:\s]+([A-Z0-9\-]+)/i,
-            /s[\/\s]n[:\s]+([A-Z0-9\-]{4,})/i,
-            /serial\s*[:\s]+([A-Z0-9\-]+)/i
-        ];
+        // Fungsi ekstraksi nilai yang lebih pintar
+        function extractValueSmart(text, keywords) {
+            const lines = text.split(/[\r\n]+/);
+            
+            for (let line of lines) {
+                const cleanLine = line.trim().toUpperCase();
+                
+                for (const keyword of keywords) {
+                    const kw = keyword.toUpperCase();
+                    if (cleanLine.includes(kw)) {
+                        // Ambil bagian setelah kata kunci, hapus tanda baca
+                        let value = cleanLine;
+                        const idx = value.indexOf(kw) + kw.length;
+                        value = value.substring(idx);
+                        
+                        // Hapus tanda pemisah
+                        value = value.replace(/^[\s:.\-=#—]+/, '').trim();
+                        
+                        // Ambil pola alfanumerik yang masuk akal
+                        const match = value.match(/[A-Z0-9\-]{3,}/);
+                        if (match) return match[0];
+                    }
+                }
+            }
+            
+            // Cari di seluruh teks, tidak harus satu baris
+            const upperText = text.toUpperCase();
+            for (const keyword of keywords) {
+                const kw = keyword.toUpperCase();
+                const idx = upperText.indexOf(kw);
+                if (idx !== -1) {
+                    const after = upperText.substring(idx + kw.length);
+                    const match = after.match(/[:\s\-—=#]*([A-Z0-9\-]{4,})/);
+                    if (match && match[1]) return match[1];
+                }
+            }
+            
+            return null;
+        }
 
         document.addEventListener('DOMContentLoaded', () => {
             html5QrCode = new Html5Qrcode("reader");
@@ -330,7 +358,7 @@
 
         function onScanSuccess(decodedText) {
             html5QrCode.pause();
-            showToast("Barcode: " + decodedText.substring(0, 20) + "...");
+            showToast("Barcode terbaca");
             setTimeout(() => { if (scannerRunning) html5QrCode.resume(); }, 2000);
         }
 
@@ -395,6 +423,7 @@
                 document.getElementById('ocr-progress-text').textContent = 'Selesai!';
                 
                 const extractedText = result.data.text;
+                console.log("📝 Teks terbaca OCR:\n", extractedText); // Untuk debugging
                 parseAndDisplayData(extractedText);
                 
                 setTimeout(() => {
@@ -412,50 +441,23 @@
             document.getElementById('empty-state').classList.add('hidden');
             document.getElementById('detection-results').classList.remove('hidden');
             
-            let model = null;
-            let serial = null;
-            
-            // Cari Model
-            for (const pattern of MODEL_PATTERNS) {
-                const match = text.match(pattern);
-                if (match && match[1]) {
-                    model = match[1].trim().toUpperCase();
-                    break;
-                }
-            }
-            
-            // Cari Serial
-            for (const pattern of SERIAL_PATTERNS) {
-                const match = text.match(pattern);
-                if (match && match[1]) {
-                    serial = match[1].trim().toUpperCase();
-                    break;
-                }
-            }
+            // Ekstrak data dengan fungsi pintar baru
+            let model = extractValueSmart(text, MODEL_KEYWORDS);
+            let serial = extractValueSmart(text, SERIAL_KEYWORDS);
             
             // Tampilkan Hasil
-            if (model) {
-                document.getElementById('model-value').textContent = model;
-            } else {
-                document.getElementById('model-value').textContent = 'Tidak terdeteksi';
-            }
-            
-            if (serial) {
-                document.getElementById('serial-value').textContent = serial;
-            } else {
-                document.getElementById('serial-value').textContent = 'Tidak terdeteksi';
-            }
+            document.getElementById('model-value').textContent = model || 'Tidak terdeteksi';
+            document.getElementById('serial-value').textContent = serial || 'Tidak terdeteksi';
             
             const now = new Date();
             document.getElementById('scan-time').textContent = 
                 now.toLocaleDateString('id-ID') + ' ' + now.toLocaleTimeString('id-ID');
             
-            // Tambah ke riwayat jika keduanya ada
             if (model || serial) {
                 addToHistory(model, serial);
                 showToast("✅ Data berhasil diambil!");
             } else {
-                showToast("⚠️ Data tidak terdeteksi, coba foto lebih jelas");
+                showToast("⚠️ Coba foto lebih jelas/tidak miring");
             }
         }
 
@@ -501,7 +503,7 @@
                 list.innerHTML = '<p class="text-slate-400 text-center py-4">Belum ada riwayat</p>';
                 return;
             }
-            list.innerHTML = history.map((item, idx) => `
+            list.innerHTML = history.map((item) => `
                 <div class="p-3 bg-slate-50 rounded-lg border border-slate-100">
                     <div class="flex justify-between items-start mb-1">
                         <span class="text-xs text-slate-400">${item.time}</span>
@@ -513,11 +515,11 @@
         }
 
         function saveHistory() {
-            localStorage.setItem('rscan-history-v3', JSON.stringify(history));
+            localStorage.setItem('rscan-history-v4', JSON.stringify(history));
         }
 
         function loadHistory() {
-            const saved = localStorage.getItem('rscan-history-v3');
+            const saved = localStorage.getItem('rscan-history-v4');
             if (saved) {
                 history = JSON.parse(saved);
                 renderHistory();
@@ -531,7 +533,7 @@
 
         function clearHistory() {
             history = [];
-            localStorage.removeItem('rscan-history-v3');
+            localStorage.removeItem('rscan-history-v4');
             renderHistory();
             showToast("🗑️ Riwayat dikosongkan");
         }
