@@ -3,461 +3,148 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>R-Scan v6 | Model & Serial Detector</title>
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <title>R-Scan v7</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
-    
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        
-        :root {
-            --primary: #165DFF;
-            --secondary: #36CBCB;
-            --success: #00B42A;
-            --warning: #FF7D00;
-            --danger: #F53F3F;
-        }
-        
-        * { font-family: 'Inter', sans-serif; }
-        
-        .logo-container {
-            background: linear-gradient(135deg, #165DFF 0%, #36CBCB 100%);
-        }
-        
-        .gradient-border {
-            position: relative; border-radius: 16px;
-        }
-        .gradient-border::before {
-            content: ''; position: absolute; inset: 0; border-radius: 16px;
-            padding: 2px; background: linear-gradient(135deg, #165DFF, #36CBCB);
-            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-            -webkit-mask-composite: xor; mask-composite: exclude;
-            pointer-events: none;
-        }
-        
-        .card-shadow { box-shadow: 0 4px 24px rgba(22, 93, 255, 0.08); }
-        
-        .tab-active { 
-            background: linear-gradient(135deg, #165DFF 0%, #36CBCB 100%);
-            color: white;
-        }
+        body { font-family: system-ui, sans-serif; background: #f8fafc; }
+        .btn-blue { background: #165DFF; }
+        .btn-blue:hover { background: #1550e0; }
+        .model-box { background: #ecfdf3; border: 1px solid #a7f3d0; }
+        .serial-box { background: #fff9eb; border: 1px solid #fed79c; }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen text-slate-800">
+<body class="min-h-screen">
+    <div class="max-w-md mx-auto px-4 py-5">
+        <h1 class="text-xl font-bold text-center mb-6">R-Scan v7</h1>
 
-    <header class="bg-white shadow-sm sticky top-0 z-50">
-        <div class="container mx-auto px-4 py-3 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="logo-container w-11 h-11 rounded-xl flex items-center justify-center shadow-md">
-                    <span class="text-white text-xl font-bold">R</span>
-                </div>
-                <div>
-                    <h1 class="text-lg font-bold text-slate-800">R-Scan v6</h1>
-                    <p class="text-xs text-slate-500">Pemisahan Model & Seri Akurat</p>
-                </div>
+        <!-- Upload -->
+        <div class="bg-white rounded-xl p-4 shadow-sm mb-4">
+            <input type="file" id="img-input" accept="image/*" class="hidden">
+            <label for="img-input" class="block border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-400">
+                <i class="fa fa-upload text-blue-500 text-2xl"></i>
+                <p class="mt-2">Pilih Foto Label</p>
+            </label>
+            
+            <div id="preview-wrap" class="hidden mt-4">
+                <img id="preview" class="w-full rounded-lg border">
+                <button onclick="clearAll()" class="text-red-500 text-sm mt-2">
+                    <i class="fa fa-times"></i> Hapus
+                </button>
             </div>
-            <div class="flex items-center gap-2">
-                <span id="status-indicator" class="w-2.5 h-2.5 rounded-full bg-gray-300"></span>
-                <span id="status-text" class="text-xs text-slate-500">Siap</span>
-            </div>
-        </div>
-    </header>
-
-    <main class="container mx-auto px-4 py-5 max-w-md">
-        <div class="flex bg-slate-100 rounded-xl p-1 mb-5">
-            <button id="tab-camera" onclick="switchTab('camera')" 
-                class="flex-1 py-2 px-3 rounded-lg text-sm font-medium tab-active transition-all">
-                <i class="fa fa-camera mr-1"></i> Kamera
+            
+            <button id="go-btn" onclick="bacaData()" disabled
+                class="w-full btn-blue text-white py-3 rounded-lg mt-4 font-medium disabled:opacity-50">
+                <i class="fa fa-magic"></i> Baca Data
             </button>
-            <button id="tab-gallery" onclick="switchTab('gallery')" 
-                class="flex-1 py-2 px-3 rounded-lg text-sm font-medium text-slate-600 transition-all">
-                <i class="fa fa-folder-open mr-1"></i> Dari Foto
-            </button>
-        </div>
-
-        <div id="camera-section">
-            <div class="bg-white rounded-2xl p-4 mb-5 card-shadow gradient-border">
-                <div class="relative overflow-hidden rounded-xl bg-slate-900 aspect-square">
-                    <div id="reader" class="w-full h-full"></div>
-                    <div id="camera-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-white">
-                        <i class="fa fa-camera fa-3x mb-3 text-slate-400"></i>
-                        <p class="text-slate-400 text-sm">Kamera belum aktif</p>
-                    </div>
-                </div>
-                
-                <div class="flex gap-3 mt-4">
-                    <button id="start-btn" onclick="startScanner()" 
-                        class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2">
-                        <i class="fa fa-play"></i>
-                        <span>Mulai Pindai</span>
-                    </button>
-                    <button id="stop-btn" onclick="stopScanner()" 
-                        class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 hidden">
-                        <i class="fa fa-stop"></i>
-                        <span>Berhenti</span>
-                    </button>
-                </div>
+            
+            <div id="status" class="hidden text-center py-3 text-sm text-gray-500">
+                <i class="fa fa-spinner fa-spin"></i> Memproses...
             </div>
         </div>
 
-        <div id="gallery-section" class="hidden">
-            <div class="bg-white rounded-2xl p-4 mb-5 card-shadow gradient-border">
-                <div class="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center mb-4">
-                    <input type="file" id="image-input" accept="image/*" class="hidden" onchange="handleImageSelect(event)">
-                    <label for="image-input" class="cursor-pointer">
-                        <i class="fa fa-cloud-upload fa-2x text-blue-500 mb-3"></i>
-                        <p class="text-slate-600 font-medium">Klik untuk pilih foto</p>
-                        <p class="text-xs text-slate-400 mt-1">Pilih gambar dari galeri HP</p>
-                    </label>
-                </div>
-                
-                <div id="image-preview-container" class="hidden mb-4">
-                    <p class="text-sm text-slate-500 mb-2">Pratinjau:</p>
-                    <img id="image-preview" class="w-full rounded-xl border max-h-52 object-contain" />
-                    <button onclick="clearImage()" class="mt-2 text-sm text-red-500 hover:text-red-700">
-                        <i class="fa fa-times-circle mr-1"></i>Hapus foto
-                    </button>
-                </div>
-                
-                <div id="ocr-progress-container" class="hidden mt-4">
-                    <p class="text-sm text-slate-500 mb-2">
-                        <i class="fa fa-spinner fa-spin mr-2"></i>Membaca data...
-                    </p>
-                    <div class="w-full bg-slate-200 rounded-full h-2">
-                        <div id="ocr-progress-bar" class="bg-blue-500 h-2 rounded-full transition-all" style="width: 0%"></div>
-                    </div>
-                    <p id="ocr-progress-text" class="text-xs text-slate-400 mt-1">Menginisialisasi...</p>
-                </div>
-                
-                <button id="scan-image-btn" onclick="processImage()" disabled
-                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-4">
-                    <i class="fa fa-magic mr-2"></i>Ambil Data
-                </button>
+        <!-- Hasil -->
+        <div id="hasil-wrap" class="hidden">
+            <div class="model-box rounded-lg p-4 mb-3">
+                <div class="text-sm text-green-700 font-medium mb-1">NOMOR MODEL</div>
+                <div id="model-out" class="font-mono text-lg font-bold">-</div>
+            </div>
+            <div class="serial-box rounded-lg p-4 mb-3">
+                <div class="text-sm text-amber-700 font-medium mb-1">NOMOR SERI</div>
+                <div id="serial-out" class="font-mono text-lg font-bold">-</div>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-3 mt-4">
+                <div class="text-xs text-gray-500 mb-1">📝 Teks terbaca OCR (untuk cek):</div>
+                <pre id="raw-text" class="text-xs text-gray-600 whitespace-pre-wrap break-all"></pre>
             </div>
         </div>
-
-        <div class="bg-white rounded-2xl p-5 mb-5 card-shadow">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="font-semibold text-slate-800 flex items-center gap-2">
-                    <i class="fa fa-check-circle text-blue-500"></i>
-                    Hasil Data
-                </h2>
-                <button onclick="clearResults()" class="text-xs text-slate-400 hover:text-red-500 transition-colors">
-                    <i class="fa fa-trash-o mr-1"></i>Bersihkan
-                </button>
-            </div>
-
-            <div id="result-container">
-                <div id="empty-state" class="text-center py-8 text-slate-400">
-                    <i class="fa fa-search fa-2x mb-3"></i>
-                    <p>Pilih foto lalu klik "Ambil Data"</p>
-                </div>
-
-                <div id="detection-results" class="space-y-4 hidden">
-                    <div class="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="text-sm font-medium text-emerald-700 flex items-center gap-2">
-                                <i class="fa fa-cube"></i> NOMOR MODEL
-                            </span>
-                            <button onclick="copyText('model-value')" class="text-emerald-600 hover:text-emerald-800">
-                                <i class="fa fa-copy"></i>
-                            </button>
-                        </div>
-                        <span id="model-value" class="font-mono text-lg font-semibold text-slate-800">-</span>
-                    </div>
-
-                    <div class="p-4 bg-amber-50 rounded-xl border border-amber-100">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="text-sm font-medium text-amber-700 flex items-center gap-2">
-                                <i class="fa fa-tag"></i> NOMOR SERI
-                            </span>
-                            <button onclick="copyText('serial-value')" class="text-amber-600 hover:text-amber-800">
-                                <i class="fa fa-copy"></i>
-                            </button>
-                        </div>
-                        <span id="serial-value" class="font-mono text-lg font-semibold text-slate-800">-</span>
-                    </div>
-
-                    <div class="pt-2 mt-2 border-t border-slate-100 text-xs text-slate-400 text-right">
-                        Diproses pada: <span id="scan-time">-</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-2xl p-5 card-shadow">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="font-semibold text-slate-800 flex items-center gap-2">
-                    <i class="fa fa-history text-slate-500"></i>
-                    Riwayat
-                </h2>
-                <button onclick="clearHistory()" class="text-xs text-slate-400 hover:text-red-500 transition-colors">
-                    Kosongkan
-                </button>
-            </div>
-            <div id="history-list" class="space-y-2 max-h-48 overflow-y-auto text-sm">
-                <p class="text-slate-400 text-center py-4">Belum ada riwayat</p>
-            </div>
-        </div>
-
-        <footer class="text-center mt-6 mb-4 text-xs text-slate-400">
-            <p><span class="font-bold text-blue-600">R-Scan v6</span> © 2026 — Pemisahan Akurat</p>
-        </footer>
-    </main>
-
-    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-4 py-2 rounded-xl shadow-lg text-sm opacity-0 transition-opacity duration-300 pointer-events-none z-50">
-        Berhasil!
     </div>
 
     <script>
-        let history = [];
-        let selectedImageData = null;
+        let selectedImage = null;
 
-        // ========== FUNGSI EKSTRAKSI LANGSUNG DARI LABEL ==========
-        
-        function extractByLabel(text, labelList) {
-            const lines = text.split(/[\r\n]+/);
-            for (let line of lines) {
-                const upperLine = line.toUpperCase();
-                for (const label of labelList) {
-                    const idx = upperLine.indexOf(label);
-                    if (idx !== -1) {
-                        let value = upperLine.substring(idx + label.length).replace(/^[\s:.\-=]+/, '').trim();
-                        const match = value.match(/[A-Z0-9]{5,}/);
-                        if (match) return match[0];
-                    }
-                }
-            }
-            return null;
-        }
-
-        // ========== DETEKSI MODEL: 2 ANGKA DI DEPAN ==========
-        function findModel(text) {
-            // Langkah 1: Cari langsung setelah label "NO. MODEL"
-            const directModel = extractByLabel(text, ['NO. MODEL', 'NOMOR MODEL', 'MODEL NO', 'MODEL']);
-            if (directModel && /^\d{2}[A-Z0-9]{4,}/.test(directModel)) {
-                return directModel;
-            }
-            
-            // Langkah 2: Cari pola 2 angka di depan + huruf/angka
-            const lines = text.split(/[\r\n]+/);
-            let candidates = [];
-            const modelPattern = /\b\d{2}[A-Z0-9]{4,}\b/g;
-            
-            for (let line of lines) {
-                const matches = line.toUpperCase().match(modelPattern);
-                if (matches) {
-                    matches.forEach(m => {
-                        if (/[A-Z]/.test(m) && /\d/.test(m)) {
-                            candidates.push(m);
-                        }
-                    });
-                }
-            }
-            return candidates.length > 0 ? candidates.sort((a, b) => b.length - a.length)[0] : null;
-        }
-
-        // ========== DETEKSI SERI: BUKAN 2 ANGKA DI DEPAN ==========
-        function findSerial(text, modelValue) {
-            // Langkah 1: Cari langsung setelah label "NO. SERI"
-            const directSerial = extractByLabel(text, ['NO. SERI', 'NOMOR SERI', 'SERIAL NO', 'S/N', 'NO.SERI']);
-            if (directSerial) return directSerial;
-            
-            // Langkah 2: Cari kode alfanumerik panjang YANG BUKAN model
-            const serialPattern = /\b[A-Z0-9]{7,}\b/g;
-            let matches = text.toUpperCase().match(serialPattern) || [];
-            
-            // Filter: buang yang = model, buang yang diawali 2 angka
-            matches = matches.filter(m => {
-                if (modelValue && m === modelValue) return false;
-                if (/^\d{2}[A-Z]/.test(m)) return false; // ini model, bukan seri
-                return true;
-            });
-            
-            return matches.length > 0 ? matches[0] : null;
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            loadHistory();
-        });
-
-        function switchTab(tab) {
-            const cameraSection = document.getElementById('camera-section');
-            const gallerySection = document.getElementById('gallery-section');
-            const tabCamera = document.getElementById('tab-camera');
-            const tabGallery = document.getElementById('tab-gallery');
-            
-            if (tab === 'camera') {
-                cameraSection.classList.remove('hidden');
-                gallerySection.classList.add('hidden');
-                tabCamera.classList.add('tab-active');
-                tabCamera.classList.remove('text-slate-600');
-                tabGallery.classList.remove('tab-active');
-                tabGallery.classList.add('text-slate-600');
-            } else {
-                cameraSection.classList.add('hidden');
-                gallerySection.classList.remove('hidden');
-                tabGallery.classList.add('tab-active');
-                tabGallery.classList.remove('text-slate-600');
-                tabCamera.classList.remove('tab-active');
-                tabCamera.classList.add('text-slate-600');
-            }
-        }
-
-        function handleImageSelect(event) {
-            const file = event.target.files[0];
+        document.getElementById('img-input').addEventListener('change', e => {
+            const file = e.target.files[0];
             if (!file) return;
-            
             const reader = new FileReader();
-            reader.onload = function(e) {
-                selectedImageData = e.target.result;
-                document.getElementById('image-preview').src = selectedImageData;
-                document.getElementById('image-preview-container').classList.remove('hidden');
-                document.getElementById('scan-image-btn').disabled = false;
+            reader.onload = ev => {
+                selectedImage = ev.target.result;
+                document.getElementById('preview').src = selectedImage;
+                document.getElementById('preview-wrap').classList.remove('hidden');
+                document.getElementById('go-btn').disabled = false;
+                document.getElementById('hasil-wrap').classList.add('hidden');
             };
             reader.readAsDataURL(file);
+        });
+
+        function clearAll() {
+            selectedImage = null;
+            document.getElementById('img-input').value = '';
+            document.getElementById('preview-wrap').classList.add('hidden');
+            document.getElementById('go-btn').disabled = true;
+            document.getElementById('hasil-wrap').classList.add('hidden');
         }
 
-        function clearImage() {
-            selectedImageData = null;
-            document.getElementById('image-input').value = '';
-            document.getElementById('image-preview-container').classList.add('hidden');
-            document.getElementById('scan-image-btn').disabled = true;
-            document.getElementById('ocr-progress-container').classList.add('hidden');
-        }
-
-        async function processImage() {
-            if (!selectedImageData) return;
-            
-            document.getElementById('ocr-progress-container').classList.remove('hidden');
-            document.getElementById('ocr-progress-bar').style.width = '0%';
-            document.getElementById('ocr-progress-text').textContent = 'Memuat mesin OCR...';
+        async function bacaData() {
+            document.getElementById('status').classList.remove('hidden');
+            document.getElementById('hasil-wrap').classList.add('hidden');
             
             try {
-                const result = await Tesseract.recognize(
-                    selectedImageData,
-                    'eng',
-                    {
-                        logger: m => {
-                            if (m.status === 'recognizing text') {
-                                const pct = Math.round(m.progress * 100);
-                                document.getElementById('ocr-progress-bar').style.width = pct + '%';
-                                document.getElementById('ocr-progress-text').textContent = `Membaca: ${pct}%`;
-                            } else {
-                                document.getElementById('ocr-progress-text').textContent = m.status;
-                            }
+                const result = await Tesseract.recognize(selectedImage, 'eng', {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            document.getElementById('status').innerHTML = 
+                                `<i class="fa fa-spinner fa-spin"></i> Membaca ${Math.round(m.progress*100)}%`;
                         }
                     }
-                );
+                });
                 
-                document.getElementById('ocr-progress-bar').style.width = '100%';
-                document.getElementById('ocr-progress-text').textContent = 'Selesai!';
+                const teks = result.data.text;
+                document.getElementById('raw-text').textContent = teks;
                 
-                const extractedText = result.data.text;
-                console.log("📝 Teks OCR:\n", extractedText);
-                parseAndDisplayData(extractedText);
+                // === CARI MODEL: cari setelah "NO. MODEL" atau "NOMOR MODEL" ===
+                let model = cariSetelahKata(teks, ['NO. MODEL', 'NOMOR MODEL', 'MODEL :', 'MODEL:']);
                 
-                setTimeout(() => {
-                    document.getElementById('ocr-progress-container').classList.add('hidden');
-                }, 600);
+                // Kalau tidak ketemu, cari pola: 2 angka + huruf
+                if (!model) {
+                    const m = teks.match(/\b(\d{2,}[A-Z0-9]{5,})\b/);
+                    if (m) model = m[1];
+                }
+                
+                // === CARI SERI: cari setelah "NO. SERI" atau "NOMOR SERI" ===
+                let serial = cariSetelahKata(teks, ['NO. SERI', 'NOMOR SERI', 'SERI:', 'NO.SERI']);
+                
+                // Kalau tidak ketemu, cari kode panjang yang BUKAN model
+                if (!serial) {
+                    const semuaKode = teks.match(/\b[A-Z0-9]{8,}\b/g) || [];
+                    serial = semuaKode.find(k => k !== model && !k.startsWith('TELEVIS')) || null;
+                }
+                
+                // Tampilkan
+                document.getElementById('model-out').textContent = model || '— Tidak terbaca —';
+                document.getElementById('serial-out').textContent = serial || '— Tidak terbaca —';
+                document.getElementById('hasil-wrap').classList.remove('hidden');
                 
             } catch (err) {
-                console.error("OCR Error:", err);
-                showToast("❌ Gagal membaca gambar");
-                document.getElementById('ocr-progress-container').classList.add('hidden');
+                alert('Error: ' + err.message);
             }
-        }
-
-        function parseAndDisplayData(text) {
-            document.getElementById('empty-state').classList.add('hidden');
-            document.getElementById('detection-results').classList.remove('hidden');
             
-            const model = findModel(text);
-            const serial = findSerial(text, model); // kirim model untuk di-exclude
-            
-            document.getElementById('model-value').textContent = model || 'Tidak terdeteksi';
-            document.getElementById('serial-value').textContent = serial || 'Tidak terdeteksi';
-            
-            const now = new Date();
-            document.getElementById('scan-time').textContent = 
-                now.toLocaleDateString('id-ID') + ' ' + now.toLocaleTimeString('id-ID');
-            
-            if (model || serial) {
-                addToHistory(model, serial);
-                showToast("✅ Data berhasil diambil!");
-            } else {
-                showToast("⚠️ Coba foto lebih jelas/tidak miring");
+            document.getElementById('status').classList.add('hidden');
+        }
+
+        function cariSetelahKata(teks, kataKunci) {
+            const upper = teks.toUpperCase();
+            for (const k of kataKunci) {
+                const pos = upper.indexOf(k);
+                if (pos === -1) continue;
+                
+                const sisa = upper.substring(pos + k.length);
+                // Ambil kode alfanumerik pertama
+                const cocok = sisa.match(/[A-Z0-9]{5,}/);
+                if (cocok) return cocok[0];
             }
-        }
-
-        function copyText(elementId) {
-            const text = document.getElementById(elementId).textContent;
-            if (text && text !== 'Tidak terdeteksi') {
-                navigator.clipboard.writeText(text).then(() => {
-                    showToast("✅ Disalin!");
-                });
-            } else {
-                showToast("⚠️ Tidak ada data untuk disalin");
-            }
-        }
-
-        function addToHistory(model, serial) {
-            const time = new Date().toLocaleTimeString('id-ID');
-            history.unshift({ model, serial, time });
-            if (history.length > 20) history.pop();
-            saveHistory();
-            renderHistory();
-        }
-
-        function renderHistory() {
-            const list = document.getElementById('history-list');
-            if (history.length === 0) {
-                list.innerHTML = '<p class="text-slate-400 text-center py-4">Belum ada riwayat</p>';
-                return;
-            }
-            list.innerHTML = history.map((item) => `
-                <div class="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                    <div class="flex justify-between items-start mb-1">
-                        <span class="text-xs text-slate-400">${item.time}</span>
-                    </div>
-                    ${item.model ? `<div class="text-sm"><span class="text-emerald-600 font-medium">Model:</span> <span class="font-mono">${item.model}</span></div>` : ''}
-                    ${item.serial ? `<div class="text-sm"><span class="text-amber-600 font-medium">Seri:</span> <span class="font-mono">${item.serial}</span></div>` : ''}
-                </div>
-            `).join('');
-        }
-
-        function saveHistory() {
-            localStorage.setItem('rscan-history-v6', JSON.stringify(history));
-        }
-
-        function loadHistory() {
-            const saved = localStorage.getItem('rscan-history-v6');
-            if (saved) {
-                history = JSON.parse(saved);
-                renderHistory();
-            }
-        }
-
-        function clearResults() {
-            document.getElementById('empty-state').classList.remove('hidden');
-            document.getElementById('detection-results').classList.add('hidden');
-        }
-
-        function clearHistory() {
-            history = [];
-            localStorage.removeItem('rscan-history-v6');
-            renderHistory();
-            showToast("🗑️ Riwayat dikosongkan");
-        }
-
-        function showToast(message) {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.style.opacity = '1';
-            setTimeout(() => { toast.style.opacity = '0'; }, 2500);
+            return null;
         }
     </script>
 </body>
