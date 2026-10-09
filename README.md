@@ -1,0 +1,1 @@
+# R-Scane-pemindai-otomatis-model-dan-serie-perangkat
